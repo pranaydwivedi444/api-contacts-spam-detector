@@ -62,3 +62,7 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
   res.json({ message: "Login successful" });
 };
 
+export const logout = (req: Request, res: Response) => {
+  res.clearCookie("access_token");
+  res.json({ message: "Logged out successfully" });
+};

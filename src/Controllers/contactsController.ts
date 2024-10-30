@@ -48,50 +48,49 @@ export async function searchContacts(
     let contacts = [];
     //If User has given name only 
     if (name) {
-       const contactsStartingWith = await prisma.contact.findMany({
-         where: { name: { startsWith: name as string, mode: "insensitive" } },         
-       });
-       const contactsContaining = await prisma.contact.findMany({
-         where: { name: { contains: name as string, mode: "insensitive" } },         
-         orderBy: { name: "asc" },
-       });
-    //   contacts = [...contactsStartingWith, ...contactsContaining];
-    const contacts = [...contactsStartingWith, ...contactsContaining];
-    const filtercontacts =  formatResults(contacts,userId);
-     return res.status(200).json({filtercontacts});
+        contacts = await searchByName(name as string, userId);
+        return res.status(200).json({  contacts });
     } else if (phoneNumber) {
-      let isSpam = false;
-      let spamReports = 0;
-      const user = await prisma.user.findFirst({
-        where: { phoneNumber: phoneNumber as string },
-      });
-      if (user) {
-        //if ownedby user , then show the email of the person if OWNUSERID == USERID
-        const spam = await prisma.spam.findFirst({
-          where: { phoneNumber: phoneNumber as string },
-        });
-        //if found spam then mark isSpam as true , spam.reports return them ;
-        if (spam) {
-          isSpam = true;
-          spamReports = spam.reports;
-        }
-        let email = user.id == userId ? user.email : null;
-         return res.status(200).json({name:user.name,isSpam,spamReports,email});
-      } else {
-        console.log( phoneNumber);
-        contacts = await prisma.contact.findMany({
-          where: {
-            phoneNumber: phoneNumber as string,
-          },
-        });
-        console.log(contacts);
-        const formattedContacts =  formatResults(contacts,userId);
-        res.json({formattedContacts});
-      }
+        const contactInfo = await searchByPhoneNumber(
+          phoneNumber as string,
+          userId
+        );
+        return res.status(200).json(contactInfo);
     }
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "An error occurred"});
   }
   
+}
+
+async function searchByName(name: string, userId: string | null) {
+  const contactsStartingWith = await prisma.contact.findMany({
+    where: { name: { startsWith: name, mode: "insensitive" } },
+  });
+
+  const contactsContaining = await prisma.contact.findMany({
+    where: { name: { contains: name, mode: "insensitive" } },
+    orderBy: { name: "asc" },
+  });
+//it will include the relevant results first
+  const combinedContacts = [...contactsStartingWith, ...contactsContaining];
+  return formatResults(combinedContacts, userId);
+}
+
+async function searchByPhoneNumber(phoneNumber: string, userId: string | null) {
+  const user = await prisma.user.findFirst({ where: { phoneNumber } });
+
+  if (user) {
+    const spam = await prisma.spam.findFirst({ where: { phoneNumber } });
+    const isSpam = Boolean(spam);
+    const spamReports = isSpam ? spam.reports : 0;
+    const email = user.id === userId ? user.email : null;
+    //if user has contacts then only show the email
+    return { name: user.name, isSpam, spamReports, email };
+  } else {
+    const contacts = await prisma.contact.findMany({ where: { phoneNumber } });
+    const formattedContacts = formatResults(contacts, userId);
+    return { formattedContacts };
+  }
 }
